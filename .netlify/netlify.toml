@@ -9,7 +9,6 @@ redirects = []
 [build]
 publish = "/Users/alijawad/Downloads/arcade-vault"
 publishOrigin = "default"
-base = "/Users/alijawad/Downloads/arcade-vault"
 
 [build.environment]
 
