@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MRV Breakout — Arcade Vault</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0a0a12;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:'Courier New',monospace;color:#e0c875;}
+h1{font-size:1.8rem;margin-bottom:6px;letter-spacing:2px;}
+.sub{font-size:.85rem;color:#666;margin-bottom:16px;}
+canvas{border:2px solid #1e1e35;border-radius:4px;display:block;cursor:none;}
+.hud{display:flex;gap:24px;margin:12px 0;font-size:.9rem;}
+.hud span{color:#888;}.hud strong{color:#e0c875;}
+.prize{margin-top:14px;background:rgba(74,124,89,.08);border:1px solid rgba(74,124,89,.2);border-radius:8px;padding:10px 20px;font-size:.85rem;text-align:center;}
+.prize em{color:#4caf50;}
+#overlay{position:absolute;text-align:center;background:rgba(10,10,18,.92);padding:28px 36px;border-radius:12px;border:1px solid #1e1e35;}
+#overlay h2{margin-bottom:8px;}
+#overlay p{font-size:.85rem;color:#888;margin-bottom:16px;}
+#overlay button{background:#e0c875;color:#0a0a12;border:none;padding:10px 24px;border-radius:6px;font-size:.9rem;font-weight:700;cursor:pointer;}
+#mrv-reward{display:none;margin-top:14px;color:#4caf50;font-size:.9rem;}
+.back{position:fixed;top:16px;left:16px;color:#444;text-decoration:none;font-size:.85rem;}
+.back:hover{color:#e0c875;}
+</style>
+</head>
+<body>
+<a href="index.html" class="back">← Back to Vault</a>
+<h1>◈ MRV BREAKOUT</h1>
+<p class="sub">Clear all bricks to earn 3 MRV</p>
+<div class="hud">
+  <div><span>Level: </span><strong id="level">1</strong></div>
+  <div><span>Lives: </span><strong id="lives">3</strong></div>
+  <div><span>Bricks: </span><strong id="bricks">0</strong></div>
+  <div><span>MRV: </span><strong id="mrv-bal">—</strong></div>
+</div>
+<canvas id="c" width="480" height="380"></canvas>
+<div class="prize">Clear all bricks → Earn <em>3 MRV</em> to your MorvenWallet</div>
+<div id="overlay">
+  <h2 id="ov-title">MRV Breakout</h2>
+  <p id="ov-body">Clear all bricks to win 3 MRV</p>
+  <button onclick="startGame()">Start Game</button>
+  <div id="mrv-reward"></div>
+</div>
+<script src="https://morven-sdk.vercel.app/morven.js"></script>
+<script>
+const MORVEN_API = 'https://morven-wallet-api.onrender.com';
+const PRIZE_MRV = 3;
+const W=480, H=380;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const ROWS=6, COLS=10, BPAD=4;
+const BW = (W - BPAD*(COLS+1)) / COLS;
+const BH = 18;
+let ball, paddle, bricks, lives, running, animId, rewarded, level;
+
+const COLORS = ['#ff6b6b','#ff9f43','#e0c875','#55efc4','#74b9ff','#a29bfe'];
+
+function mkBricks() {
+  const b=[];
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
+    b.push({x:BPAD+c*(BW+BPAD), y:48+r*(BH+BPAD), w:BW, h:BH, color:COLORS[r], alive:true, hp:r<2?2:1});
+  }
+  return b;
+}
+
+function startGame() {
+  document.getElementById('overlay').style.display='none';
+  level = parseInt(document.getElementById('level').textContent)||1;
+  const spd = 3.5 + level*0.4;
+  ball = {x:W/2,y:H-80,vx:spd,vy:-spd,r:7};
+  paddle = {x:W/2-40,y:H-24,w:80,h:12};
+  bricks = mkBricks();
+  lives = parseInt(document.getElementById('lives').textContent)||3;
+  running = true; rewarded = false;
+  updateHud();
+  cancelAnimationFrame(animId);
+  loop();
+}
+
+function updateHud() {
+  document.getElementById('level').textContent = level||1;
+  document.getElementById('lives').textContent = lives;
+  const alive = bricks.filter(b=>b.alive).length;
+  document.getElementById('bricks').textContent = alive;
+}
+
+function loop() {
+  if(!running){return;}
+  update(); draw();
+  animId = requestAnimationFrame(loop);
+}
+
+function update() {
+  ball.x += ball.vx; ball.y += ball.vy;
+  // Walls
+  if(ball.x-ball.r<0){ball.x=ball.r;ball.vx*=-1;}
+  if(ball.x+ball.r>W){ball.x=W-ball.r;ball.vx*=-1;}
+  if(ball.y-ball.r<0){ball.y=ball.r;ball.vy*=-1;}
+  // Bottom
+  if(ball.y+ball.r>H){
+    lives--;
+    document.getElementById('lives').textContent=lives;
+    if(lives<=0){endGame(false);return;}
+    ball={x:W/2,y:H-80,vx:3.5+level*0.4,vy:-(3.5+level*0.4),r:7};
+    return;
+  }
+  // Paddle
+  if(ball.y+ball.r>paddle.y && ball.x>paddle.x && ball.x<paddle.x+paddle.w) {
+    ball.vy=Math.abs(ball.vy)*-1;
+    const off=(ball.x-(paddle.x+paddle.w/2))/(paddle.w/2);
+    ball.vx=(3.5+level*0.4)*off*1.3;
+    ball.y=paddle.y-ball.r-1;
+  }
+  // Bricks
+  for(const b of bricks) {
+    if(!b.alive) continue;
+    if(ball.x+ball.r>b.x && ball.x-ball.r<b.x+b.w && ball.y+ball.r>b.y && ball.y-ball.r<b.y+b.h) {
+      b.hp--;
+      if(b.hp<=0) b.alive=false;
+      // Determine bounce direction
+      const cx=ball.x, cy=ball.y;
+      const ox=Math.min(ball.x+ball.r,b.x+b.w)-Math.max(ball.x-ball.r,b.x);
+      const oy=Math.min(ball.y+ball.r,b.y+b.h)-Math.max(ball.y-ball.r,b.y);
+      if(ox<oy) ball.vx*=-1; else ball.vy*=-1;
+      break;
+    }
+  }
+  updateHud();
+  if(bricks.every(b=>!b.alive)){endGame(true);}
+}
+
+function draw() {
+  ctx.fillStyle='#0a0a12'; ctx.fillRect(0,0,W,H);
+  // Bricks
+  bricks.forEach(b=>{
+    if(!b.alive)return;
+    ctx.fillStyle=b.hp>1?'#fff':b.color;
+    ctx.fillRect(b.x,b.y,b.w,b.h);
+    ctx.fillStyle='rgba(0,0,0,.3)';
+    ctx.fillRect(b.x+b.w-3,b.y,3,b.h);
+    ctx.fillRect(b.x,b.y+b.h-3,b.w,3);
+  });
+  // Paddle
+  const px=paddle.x, py=paddle.y, pw=paddle.w, ph=paddle.h;
+  ctx.fillStyle='#e0c875';
+  ctx.beginPath();
+  ctx.roundRect(px,py,pw,ph,6);
+  ctx.fill();
+  // Ball
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(224,200,117,.3)';
+  ctx.beginPath(); ctx.arc(ball.x,ball.y,ball.r+4,0,Math.PI*2); ctx.fill();
+}
+
+function endGame(win) {
+  running=false; cancelAnimationFrame(animId);
+  const ov=document.getElementById('overlay');
+  document.getElementById('ov-title').textContent = win ? '\uD83C\uDF89 Level Clear!' : 'Game Over';
+  document.getElementById('ov-body').textContent = win ? 'You cleared all bricks!' : 'No lives left.';
+  const btn = ov.querySelector('button');
+  if(win){
+    level = (level||1)+1;
+    document.getElementById('level').textContent=level;
+    btn.textContent='Next Level';
+    btn.onclick=function(){
+      document.getElementById('lives').textContent=3;
+      lives=3;
+      startGame();
+    };
+    if(level===2 && !rewarded) triggerReward();
+  } else {
+    level=1; document.getElementById('level').textContent=1;
+    btn.textContent='Try Again'; btn.onclick=function(){document.getElementById('lives').textContent=3;lives=3;startGame();};
+  }
+  ov.style.display='block';
+}
+
+async function triggerReward() {
+  rewarded=true;
+  try {
+    const result = await morvenWallet.login();
+    const payload = JSON.stringify({to:result.user?.wallet_id||result.user?.email, amount:PRIZE_MRV, reason:'arcade_breakout_win'});
+    await fetch(MORVEN_API+'/api/airdrop',{method:'POST',headers:{'Content-Type':'application/json'},body:payload}).catch(()=>{});
+    const div=document.getElementById('mrv-reward');
+    div.style.display='block'; div.textContent='\u2705 +'+PRIZE_MRV+' MRV earned!';
+    const balData = await morvenWallet.getBalance(result.jwt).catch(()=>({mrv:0}));
+    document.getElementById('mrv-bal').textContent=(balData.mrv+PRIZE_MRV).toFixed(1);
+  } catch(e){ console.log('MRV reward:',e.message); }
+}
+
+canvas.addEventListener('mousemove',e=>{
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left;
+  paddle.x=Math.max(0,Math.min(W-paddle.w,mx-paddle.w/2));
+});
+canvas.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  const rect=canvas.getBoundingClientRect();
+  const tx=e.touches[0].clientX-rect.left;
+  paddle.x=Math.max(0,Math.min(W-paddle.w,tx-paddle.w/2));
+},{passive:false});
+
+if(typeof morvenWallet!=='undefined'&&morvenWallet.isLoggedIn()){
+  morvenWallet.getBalance().then(b=>{document.getElementById('mrv-bal').textContent=b.mrv.toFixed(1);}).catch(()=>{});
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MRV Memory Match — Arcade Vault</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0a0a12;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:'Courier New',monospace;color:#e0c875;padding:20px;}
+h1{font-size:1.8rem;margin-bottom:6px;letter-spacing:2px;}
+.sub{font-size:.85rem;color:#666;margin-bottom:16px;}
+.hud{display:flex;gap:24px;margin:12px 0;font-size:.9rem;align-items:center;}
+.hud span{color:#888;}.hud strong{color:#e0c875;}
+#timer-bar{width:300px;height:8px;background:#1e1e35;border-radius:4px;overflow:hidden;}
+#timer-fill{height:100%;background:linear-gradient(90deg,#4caf50,#e0c875,#ff6b6b);transition:width .1s linear;border-radius:4px;}
+.grid{display:grid;grid-template-columns:repeat(4,80px);gap:10px;margin:16px 0;}
+.card{width:80px;height:80px;cursor:pointer;perspective:300px;}
+.card-inner{width:100%;height:100%;position:relative;transform-style:preserve-3d;transition:transform .35s cubic-bezier(.4,0,.2,1);}
+.card.flipped .card-inner,.card.matched .card-inner{transform:rotateY(180deg);}
+.card-face{position:absolute;inset:0;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:2rem;backface-visibility:hidden;}
+.card-back{background:#1e1e35;border:1px solid #2a2a45;}
+.card-back::after{content:'◈';font-size:1.2rem;color:#333;}
+.card-front{background:#15152a;border:1px solid #333;transform:rotateY(180deg);}
+.card.matched .card-front{background:#1a2a1a;border-color:#4caf50;}
+.prize{margin-top:14px;background:rgba(74,124,89,.08);border:1px solid rgba(74,124,89,.2);border-radius:8px;padding:10px 20px;font-size:.85rem;text-align:center;}
+.prize em{color:#4caf50;}
+#overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,18,.8);z-index:10;}
+.modal{background:#111122;border:1px solid #1e1e35;border-radius:16px;padding:32px 40px;text-align:center;max-width:320px;}
+.modal h2{margin-bottom:8px;}
+.modal p{font-size:.85rem;color:#888;margin-bottom:16px;line-height:1.5;}
+.modal button{background:#e0c875;color:#0a0a12;border:none;padding:10px 24px;border-radius:6px;font-size:.9rem;font-weight:700;cursor:pointer;}
+#mrv-reward{display:none;margin-top:14px;color:#4caf50;font-size:.9rem;}
+.back{position:fixed;top:16px;left:16px;color:#444;text-decoration:none;font-size:.85rem;}
+.back:hover{color:#e0c875;}
+</style>
+</head>
+<body>
+<a href="index.html" class="back">← Back to Vault</a>
+<h1>◈ MEMORY MATCH</h1>
+<p class="sub">Match all pairs before time runs out → Earn 1 MRV</p>
+<div class="hud">
+  <div><span>Pairs: </span><strong id="pairs">0/8</strong></div>
+  <div><span>Moves: </span><strong id="moves">0</strong></div>
+  <div id="timer-bar"><div id="timer-fill" style="width:100%"></div></div>
+  <div><span id="timer-txt">60s</span></div>
+  <div><span>MRV: </span><strong id="mrv-bal">—</strong></div>
+</div>
+<div class="grid" id="grid"></div>
+<div class="prize">Beat the timer → Earn <em>1 MRV</em> to your MorvenWallet</div>
+
+<div id="overlay">
+  <div class="modal">
+    <h2 id="ov-title">Memory Match</h2>
+    <p id="ov-body">Match all 8 pairs before 60 seconds to earn 1 MRV!</p>
+    <button id="ov-btn" onclick="startGame()">Start Game</button>
+    <div id="mrv-reward"></div>
+  </div>
+</div>
+
+<script src="https://morven-sdk.vercel.app/morven.js"></script>
+<script>
+const MORVEN_API = 'https://morven-wallet-api.onrender.com';
+const PRIZE_MRV = 1;
+const TOTAL_TIME = 60;
+const SYMBOLS = ['🎮','💎','🌟','🔮','⚡','🎯','🏆','🌙'];
+
+let cards, flipped, matched, moves, timer, timeLeft, running, rewarded;
+
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('mrv-reward').style.display = 'none';
+  flipped=[]; matched=0; moves=0; timeLeft=TOTAL_TIME; running=true; rewarded=false;
+  document.getElementById('pairs').textContent = '0/8';
+  document.getElementById('moves').textContent = '0';
+  document.getElementById('timer-txt').textContent = TOTAL_TIME+'s';
+  document.getElementById('timer-fill').style.width = '100%';
+
+  const deck = shuffle([...SYMBOLS,...SYMBOLS]);
+  const grid = document.getElementById('grid');
+  grid.textContent = '';
+  cards = deck.map((sym, i) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.sym = sym;
+    card.dataset.idx = i;
+    const inner = document.createElement('div');
+    inner.className = 'card-inner';
+    const back = document.createElement('div');
+    back.className = 'card-face card-back';
+    const front = document.createElement('div');
+    front.className = 'card-face card-front';
+    front.textContent = sym;
+    inner.appendChild(back);
+    inner.appendChild(front);
+    card.appendChild(inner);
+    card.addEventListener('click', () => onFlip(card));
+    grid.appendChild(card);
+    return card;
+  });
+
+  clearInterval(timer);
+  timer = setInterval(tick, 1000);
+}
+
+function tick() {
+  timeLeft--;
+  const pct = (timeLeft/TOTAL_TIME)*100;
+  document.getElementById('timer-fill').style.width = pct+'%';
+  document.getElementById('timer-txt').textContent = timeLeft+'s';
+  if(timeLeft<=0){ clearInterval(timer); endGame(false); }
+}
+
+function onFlip(card) {
+  if(!running) return;
+  if(card.classList.contains('flipped') || card.classList.contains('matched')) return;
+  if(flipped.length>=2) return;
+  card.classList.add('flipped');
+  flipped.push(card);
+  if(flipped.length===2){
+    moves++;
+    document.getElementById('moves').textContent=moves;
+    if(flipped[0].dataset.sym===flipped[1].dataset.sym){
+      flipped[0].classList.add('matched');
+      flipped[1].classList.add('matched');
+      flipped=[];
+      matched++;
+      document.getElementById('pairs').textContent=matched+'/8';
+      if(matched===8){ clearInterval(timer); endGame(true); }
+    } else {
+      const [a,b]=[...flipped];
+      setTimeout(()=>{a.classList.remove('flipped');b.classList.remove('flipped');flipped=[];},800);
+    }
+  }
+}
+
+function endGame(win) {
+  running=false;
+  const ov=document.getElementById('overlay');
+  ov.style.display='flex';
+  document.getElementById('ov-title').textContent = win ? '\uD83C\uDF89 You Win!' : '\u23F0 Time\'s Up!';
+  document.getElementById('ov-body').textContent = win
+    ? 'All ' + matched + ' pairs matched in ' + (TOTAL_TIME-timeLeft) + 's with ' + moves + ' moves!'
+    : 'Matched ' + matched + '/8 pairs. Try again!';
+  const btn = document.getElementById('ov-btn');
+  btn.textContent = 'Play Again';
+  btn.onclick = startGame;
+  if(win && !rewarded) triggerReward();
+}
+
+async function triggerReward() {
+  rewarded=true;
+  try {
+    const result = await morvenWallet.login();
+    const payload = JSON.stringify({to:result.user?.wallet_id||result.user?.email, amount:PRIZE_MRV, reason:'arcade_memory_win'});
+    await fetch(MORVEN_API+'/api/airdrop',{method:'POST',headers:{'Content-Type':'application/json'},body:payload}).catch(()=>{});
+    const div = document.getElementById('mrv-reward');
+    div.style.display='block';
+    div.textContent = '\u2705 +'+PRIZE_MRV+' MRV earned!';
+    const balData = await morvenWallet.getBalance(result.jwt).catch(()=>({mrv:0}));
+    document.getElementById('mrv-bal').textContent = (balData.mrv+PRIZE_MRV).toFixed(1);
+  } catch(e){ console.log('MRV reward:',e.message); }
+}
+
+if(typeof morvenWallet!=='undefined'&&morvenWallet.isLoggedIn()){
+  morvenWallet.getBalance().then(b=>{document.getElementById('mrv-bal').textContent=b.mrv.toFixed(1);}).catch(()=>{});
+}
+</script>
+</body>
+</html>

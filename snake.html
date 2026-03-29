@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MRV Snake — Arcade Vault</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0a0a12;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:'Courier New',monospace;color:#e0c875;}
+h1{font-size:1.8rem;margin-bottom:6px;letter-spacing:2px;}
+.sub{font-size:.85rem;color:#666;margin-bottom:16px;}
+canvas{border:2px solid #1e1e35;border-radius:4px;display:block;}
+.hud{display:flex;gap:24px;margin:12px 0;font-size:.9rem;}
+.hud span{color:#888;}
+.hud strong{color:#e0c875;}
+.prize{margin-top:14px;background:rgba(224,200,117,.08);border:1px solid rgba(224,200,117,.2);border-radius:8px;padding:10px 20px;font-size:.85rem;text-align:center;}
+.prize em{color:#4caf50;}
+#msg{position:absolute;text-align:center;background:rgba(10,10,18,.9);padding:28px 36px;border-radius:12px;border:1px solid #1e1e35;display:none;}
+#msg h2{margin-bottom:8px;}
+#msg p{font-size:.85rem;color:#888;margin-bottom:16px;}
+#msg button{background:#e0c875;color:#0a0a12;border:none;padding:10px 24px;border-radius:6px;font-size:.9rem;font-weight:700;cursor:pointer;}
+.back{position:fixed;top:16px;left:16px;color:#444;text-decoration:none;font-size:.85rem;}
+.back:hover{color:#e0c875;}
+</style>
+</head>
+<body>
+<a href="index.html" class="back">← Back to Vault</a>
+<h1>◈ MRV SNAKE</h1>
+<p class="sub">Score 50+ points to earn 2 MRV</p>
+<div class="hud">
+  <div><span>Score: </span><strong id="score">0</strong></div>
+  <div><span>High: </span><strong id="hi">0</strong></div>
+  <div><span>MRV: </span><strong id="mrv-bal">—</strong></div>
+</div>
+<canvas id="c" width="400" height="400"></canvas>
+<div class="prize">Score 50+ → Earn <em>2 MRV</em> to your MorvenWallet · One reward per session</div>
+<div id="msg">
+  <h2 id="msg-title">Game Over</h2>
+  <p id="msg-body">Your score: <strong id="msg-score">0</strong></p>
+  <button onclick="startGame()">Play Again</button>
+  <div id="mrv-reward" style="display:none;margin-top:14px;color:#4caf50;font-size:.9rem"></div>
+</div>
+<script src="https://morven-sdk.vercel.app/morven.js"></script>
+<script>
+const MORVEN_API = 'https://morven-wallet-api.onrender.com';
+const PRIZE_THRESHOLD = 50, PRIZE_MRV = 2;
+const AIRDROP_KEY = '';  // Set via env in production
+const GRID = 20, CELL = 400 / GRID;
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+let snake, dir, nextDir, food, score, running, loop, rewarded;
+
+const hi = () => parseInt(localStorage.getItem('snake_hi') || 0);
+const setHi = v => { localStorage.setItem('snake_hi', v); document.getElementById('hi').textContent = v; };
+
+function rnd(n) { return Math.floor(Math.random() * n); }
+
+function startGame() {
+  document.getElementById('msg').style.display = 'none';
+  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir = {x:1,y:0}; nextDir = {x:1,y:0};
+  score = 0; running = true; rewarded = false;
+  placeFood();
+  document.getElementById('score').textContent = 0;
+  document.getElementById('hi').textContent = hi();
+  clearInterval(loop);
+  loop = setInterval(tick, 100);
+}
+
+function placeFood() {
+  do { food = {x:rnd(GRID), y:rnd(GRID)}; }
+  while (snake.some(s => s.x===food.x && s.y===food.y));
+}
+
+function tick() {
+  dir = nextDir;
+  const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+  if (head.x<0||head.x>=GRID||head.y<0||head.y>=GRID||snake.some(s=>s.x===head.x&&s.y===head.y)) {
+    gameOver(); return;
+  }
+  snake.unshift(head);
+  if (head.x===food.x && head.y===food.y) {
+    score++; document.getElementById('score').textContent = score;
+    if (score > hi()) setHi(score);
+    placeFood();
+    if (score >= PRIZE_THRESHOLD && !rewarded) triggerReward();
+  } else { snake.pop(); }
+  draw();
+}
+
+function draw() {
+  ctx.fillStyle = '#0a0a12'; ctx.fillRect(0,0,400,400);
+  // Grid dots
+  ctx.fillStyle = '#111122';
+  for(let x=0;x<GRID;x++) for(let y=0;y<GRID;y++) { ctx.fillRect(x*CELL+9,y*CELL+9,2,2); }
+  // Snake
+  snake.forEach((s,i) => {
+    const alpha = 1 - i/snake.length * 0.5;
+    ctx.fillStyle = i===0 ? '#e0c875' : `rgba(224,200,117,${alpha})`;
+    ctx.fillRect(s.x*CELL+1,s.y*CELL+1,CELL-2,CELL-2);
+    if(i===0){ctx.fillStyle='#0a0a12';ctx.fillRect(s.x*CELL+5,s.y*CELL+5,3,3);ctx.fillRect(s.x*CELL+12,s.y*CELL+5,3,3);}
+  });
+  // Food
+  ctx.fillStyle = '#4caf50';
+  ctx.beginPath();
+  ctx.arc(food.x*CELL+CELL/2, food.y*CELL+CELL/2, CELL/2-2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#81c784';
+  ctx.fillRect(food.x*CELL+CELL/2-1, food.y*CELL+2, 2, 5);
+  // Score bar
+  if (score < PRIZE_THRESHOLD) {
+    const pct = score / PRIZE_THRESHOLD;
+    ctx.fillStyle = 'rgba(224,200,117,0.1)';
+    ctx.fillRect(0,398,400,2);
+    ctx.fillStyle = '#e0c875';
+    ctx.fillRect(0,398,400*pct,2);
+  } else {
+    ctx.fillStyle = '#4caf50'; ctx.fillRect(0,398,400,2);
+  }
+}
+
+function gameOver() {
+  clearInterval(loop); running = false;
+  document.getElementById('msg-title').textContent = 'Game Over';
+  document.getElementById('msg-score').textContent = score;
+  document.getElementById('msg-body').textContent = 'Your score: ';
+  const sc = document.createElement('strong'); sc.textContent = score;
+  document.getElementById('msg-body').appendChild(sc);
+  if (score < PRIZE_THRESHOLD) {
+    const need = document.createElement('p');
+    need.style.cssText='font-size:.8rem;color:#666;margin-top:6px';
+    need.textContent = (PRIZE_THRESHOLD - score) + ' more points needed for MRV reward';
+    document.getElementById('msg-body').parentNode.insertBefore(need, document.getElementById('msg-body').nextSibling);
+  }
+  document.getElementById('msg').style.display = 'block';
+}
+
+async function triggerReward() {
+  rewarded = true;
+  try {
+    const result = await morvenWallet.login();
+    const jwt = result.jwt;
+    const balData = await morvenWallet.getBalance(jwt).catch(() => ({mrv:0}));
+    // Airdrop via API
+    const payload = JSON.stringify({to: result.user?.wallet_id || result.user?.email, amount: PRIZE_MRV, reason:'arcade_snake_win'});
+    await fetch(MORVEN_API + '/api/airdrop', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Airdrop-Key':AIRDROP_KEY||''},
+      body:payload
+    }).catch(()=>{});
+    document.getElementById('mrv-bal').textContent = (balData.mrv + PRIZE_MRV).toFixed(1);
+    const div = document.getElementById('mrv-reward');
+    div.style.display = 'block';
+    div.textContent = '\u2705 +' + PRIZE_MRV + ' MRV sent to your wallet!';
+  } catch(e) {
+    console.log('MRV reward:', e.message);
+  }
+}
+
+document.addEventListener('keydown', e => {
+  const map = {ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1},ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0},
+               w:{x:0,y:-1},s:{x:0,y:1},a:{x:-1,y:0},d:{x:1,y:0}};
+  const d = map[e.key];
+  if (d && !(d.x===-dir.x && d.y===-dir.y)) { nextDir = d; e.preventDefault(); }
+});
+canvas.addEventListener('click', () => { if (!running) startGame(); });
+
+// Load MRV balance if logged in
+if (typeof morvenWallet !== 'undefined' && morvenWallet.isLoggedIn()) {
+  morvenWallet.getBalance().then(b => {
+    document.getElementById('mrv-bal').textContent = b.mrv.toFixed(1);
+  }).catch(()=>{});
+}
+
+document.getElementById('msg').style.display = 'flex';
+document.getElementById('msg').style.flexDirection = 'column';
+document.getElementById('msg').style.alignItems = 'center';
+document.getElementById('msg').style.justifyContent = 'center';
+document.getElementById('msg').style.position = 'absolute';
+document.getElementById('msg-title').textContent = 'MRV Snake';
+document.getElementById('msg-body').textContent = 'Score 50 to earn 2 MRV';
+document.getElementById('msg').style.display = 'block';
+</script>
+</body>
+</html>
