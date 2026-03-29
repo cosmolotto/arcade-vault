@@ -9,9 +9,14 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#000510;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'VT323',monospace;touch-action:none}
 canvas{display:block;max-width:100vmin;max-height:100vmin}
+#back{position:fixed;top:14px;left:16px;color:rgba(0,230,100,.55);font-family:'VT323',monospace;font-size:18px;text-decoration:none;letter-spacing:.12em;z-index:10;transition:color .2s;}
+#back:hover{color:#00e664;}
+#hi{position:fixed;top:14px;right:16px;color:rgba(0,200,80,.45);font-family:'VT323',monospace;font-size:16px;letter-spacing:.1em;z-index:10;}
 </style>
 </head>
 <body>
+<a href="index.html" id="back">← VAULT</a>
+<div id="hi">BEST: LVL <span id="hi-val">1</span></div>
 <canvas id="c"></canvas>
 <script>
 const C=document.getElementById('c'),ctx=C.getContext('2d');
@@ -38,6 +43,8 @@ const OY=Math.floor((SZ-ROWS*CELL)/2);
 
 // State
 let maze,player,exit_,pulses,vis,level=1,STATE='start',moveRep={};
+let bestLevel=+localStorage.getItem('em_b')||1;
+document.getElementById('hi-val').textContent=bestLevel;
 
 // Recursive backtracker maze
 function genMaze(){
@@ -101,6 +108,7 @@ function move(dx,dy){
   revealAround(px,py,CELL*2.2);
   if(player.gx===exit_.gx&&player.gy===exit_.gy){
     STATE='win';sonar(880,1.2,.5);
+    if(level>bestLevel){bestLevel=level;localStorage.setItem('em_b',bestLevel);document.getElementById('hi-val').textContent=bestLevel;}
     setTimeout(()=>initLevel(level+1),1800);
   }
 }
@@ -109,10 +117,10 @@ function move(dx,dy){
 const keys={};
 document.addEventListener('keydown',e=>{
   if(AC.state==='suspended')AC.resume();
+  if(STATE==='start'){initLevel(1);return;}
   if(e.code==='Space'){e.preventDefault();const{px,py}=cellPx(player.gx,player.gy);emitPulse(px,py);return;}
   const map={'ArrowUp':[0,-1],'KeyW':[0,-1],'ArrowDown':[0,1],'KeyS':[0,1],'ArrowLeft':[-1,0],'KeyA':[-1,0],'ArrowRight':[1,0],'KeyD':[1,0]};
   if(map[e.code]){e.preventDefault();if(!keys[e.code])move(...map[e.code]);keys[e.code]=true;}
-  if(STATE==='start')initLevel(1);
 });
 document.addEventListener('keyup',e=>{keys[e.code]=false;clearInterval(moveRep[e.code]);delete moveRep[e.code];});
 // Key repeat

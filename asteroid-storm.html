@@ -9,9 +9,14 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#000;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'Orbitron',monospace;touch-action:none}
 canvas{display:block;max-width:100vw;max-height:100vh}
+#back{position:fixed;top:14px;left:16px;color:rgba(255,221,0,.55);font-family:'Orbitron',monospace;font-size:11px;text-decoration:none;letter-spacing:.15em;z-index:10;transition:color .2s;}
+#back:hover{color:#ffdd00;}
+#hi{position:fixed;top:14px;right:16px;color:rgba(255,255,255,.35);font-family:'Orbitron',monospace;font-size:10px;letter-spacing:.1em;z-index:10;}
 </style>
 </head>
 <body>
+<a href="index.html" id="back">← VAULT</a>
+<div id="hi">BEST: <span id="hi-val">0</span></div>
 <canvas id="c"></canvas>
 <script>
 const C=document.getElementById('c'),ctx=C.getContext('2d');
@@ -36,6 +41,7 @@ const dieSnd=()=>{snd(100,.8,'sawtooth',.5);snd(60,1,'sawtooth',.4);};
 
 // State
 let STATE='start',score=0,best=+localStorage.getItem('as_b')||0;
+document.getElementById('hi-val').textContent=best;
 let lives=3,wave=1,waveTimer=0,combo=0,comboTimer=0;
 let ship,bullets=[],asteroids=[],parts=[],powerups=[],stars=[];
 let keys={},last=0,shakeT=0,iTimer=0;
@@ -59,7 +65,7 @@ function spawnWave(){
     const x=Math.random()*W;
     const vy=.8+Math.random()*1.2+wave*.12;
     const vx=(Math.random()-.5)*1.5;
-    asteroids.push(mkAsteroid(x,-sz,vx,vy,sz));
+    asteroids.push(mkAsteroid(x,-sz,sz,vx,vy));
   }
 }
 
@@ -165,7 +171,7 @@ function update(dt){
           if(a.sz>28){
             for(let k=0;k<2;k++){
               const ns=a.sz*.52,ang=(Math.random()-.5)*2;
-              asteroids.push(mkAsteroid(a.x+Math.cos(ang)*20,a.y+Math.sin(ang)*20,a.vx+Math.cos(ang)*2,a.vy+Math.sin(ang)*2,ns));
+              asteroids.push(mkAsteroid(a.x+Math.cos(ang)*20,a.y+Math.sin(ang)*20,ns,a.vx+Math.cos(ang)*2,a.vy+Math.sin(ang)*2));
             }
           }
           // Powerup drop
@@ -199,7 +205,7 @@ function update(dt){
         if(ship.shield>0){ship.shield=0;burst(ship.x,ship.y,20,['#00ff88','#ffffff'],5);shakeT=.2;iTimer=1.5;break;}
         lives--;iTimer=2;shakeT=.4;dieSnd();
         burst(ship.x,ship.y,40,['#ff4400','#ffdd00','#ffffff'],8);
-        if(lives<=0){STATE='dead';if(score>best){best=score;localStorage.setItem('as_b',best);}}
+        if(lives<=0){STATE='dead';if(score>best){best=score;localStorage.setItem('as_b',best);document.getElementById('hi-val').textContent=best;}}
         break;
       }
     }
