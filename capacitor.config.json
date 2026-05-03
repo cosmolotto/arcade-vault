@@ -1,0 +1,8 @@
+{
+  "appId": "com.morven.arcadevault",
+  "appName": "Arcade Vault — Classic Games",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

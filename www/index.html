@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCADE VAULT — Classic Browser Games, No Install Required</title>
+<meta name="description" content="Play classic arcade games instantly in your browser. Snake, Tetris, Pong, Space Shooter and more — no install, no login, completely free.">
+<link rel="canonical" href="https://arcade-vault.vercel.app">
+<meta property="og:title" content="ARCADE VAULT — Classic Browser Games">
+<meta property="og:description" content="Play Snake, Tetris, Pong, Space Shooter and more in your browser. Free, instant, no install.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://arcade-vault.vercel.app">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="ARCADE VAULT — Classic Browser Games">
+<meta name="twitter:description" content="Free browser arcade games. No install, no login. Play instantly.">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Orbitron',monospace;overflow:hidden}
+h1{font-size:clamp(2rem,8vw,4rem);font-weight:900;letter-spacing:.15em;background:linear-gradient(90deg,#00ffff,#ff00ff,#ffdd00);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-align:center;margin-bottom:.2em;filter:drop-shadow(0 0 20px #00ffff88)}
+.sub{color:rgba(255,255,255,.3);font-size:.7rem;letter-spacing:.3em;margin-bottom:4rem;text-align:center}
+.games{display:flex;flex-wrap:wrap;gap:1.5rem;justify-content:center;padding:1rem}
+.card{width:220px;border:1px solid;padding:2rem 1.5rem;text-decoration:none;display:flex;flex-direction:column;gap:.8rem;transition:transform .2s,box-shadow .2s;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .2s}
+.card:hover{transform:translateY(-4px)}
+.card.cyan{border-color:#00ffff44;color:#00ffff}.card.cyan::before{background:radial-gradient(circle at 50% 0%,rgba(0,255,255,.08),transparent 70%)}.card.cyan:hover{box-shadow:0 0 30px rgba(0,255,255,.25)}.card.cyan::before{opacity:1}
+.card.magenta{border-color:#ff00ff44;color:#ff00ff}.card.magenta::before{background:radial-gradient(circle at 50% 0%,rgba(255,0,255,.08),transparent 70%)}.card.magenta:hover{box-shadow:0 0 30px rgba(255,0,255,.25)}.card.magenta::before{opacity:1}
+.card.yellow{border-color:#ffdd0044;color:#ffdd00}.card.yellow::before{background:radial-gradient(circle at 50% 0%,rgba(255,221,0,.08),transparent 70%)}.card.yellow:hover{box-shadow:0 0 30px rgba(255,221,0,.25)}.card.yellow::before{opacity:1}
+.icon{font-size:2rem}
+.name{font-size:.9rem;font-weight:700;letter-spacing:.1em}
+.desc{font-size:.62rem;letter-spacing:.05em;opacity:.6;line-height:1.6}
+.play{font-size:.6rem;letter-spacing:.2em;opacity:.5;margin-top:.5rem}
+canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<h1>ARCADE VAULT</h1>
+<p class="sub">SIX GAMES · EARN MRV · ONE VAULT</p>
+<div style="font-size:.6rem;letter-spacing:.2em;color:rgba(255,221,0,.6);margin-bottom:1.5rem;text-align:center">◈ CONNECT WALLET · WIN GAMES · EARN MRV TOKEN</div>
+<div class="games">
+  <a href="snake.html" class="card cyan">
+    <div class="icon">🐍</div>
+    <div class="name">MRV SNAKE</div>
+    <div class="desc">Classic snake. Score 50+ points to earn 2 MRV direct to your wallet.</div>
+    <div class="play" style="color:#4caf50;opacity:1">🏆 WIN 2 MRV →</div>
+  </a>
+  <a href="breakout.html" class="card magenta">
+    <div class="icon">🧱</div>
+    <div class="name">MRV BREAKOUT</div>
+    <div class="desc">Smash all bricks, clear the level. Complete level 1 to earn 3 MRV.</div>
+    <div class="play" style="color:#4caf50;opacity:1">🏆 WIN 3 MRV →</div>
+  </a>
+  <a href="memory-match.html" class="card yellow">
+    <div class="icon">🃏</div>
+    <div class="name">MEMORY MATCH</div>
+    <div class="desc">Match all pairs before the timer runs out. Beat 60s for 1 MRV reward.</div>
+    <div class="play" style="color:#4caf50;opacity:1">🏆 WIN 1 MRV →</div>
+  </a>
+  <a href="void-runner.html" class="card cyan" style="opacity:.7">
+    <div class="icon">◇</div>
+    <div class="name">VOID RUNNER</div>
+    <div class="desc">Flip gravity to survive the endless void. How long can you last?</div>
+    <div class="play">TAP TO PLAY →</div>
+  </a>
+  <a href="echo-maze.html" class="card magenta" style="opacity:.7">
+    <div class="icon">◎</div>
+    <div class="name">ECHO MAZE</div>
+    <div class="desc">Navigate in total darkness. Use sonar pulses to reveal the path.</div>
+    <div class="play">TAP TO PLAY →</div>
+  </a>
+  <a href="asteroid-storm.html" class="card yellow" style="opacity:.7">
+    <div class="icon">✦</div>
+    <div class="name">ASTEROID STORM</div>
+    <div class="desc">Defend against endless asteroid waves. Collect power-ups, build combos.</div>
+    <div class="play">TAP TO PLAY →</div>
+  </a>
+</div>
+<script>
+const c=document.getElementById('bg'),ctx=c.getContext('2d');
+c.width=window.innerWidth;c.height=window.innerHeight;
+const stars=Array.from({length:200},()=>({x:Math.random()*c.width,y:Math.random()*c.height,s:Math.random()*1.5+.3,z:Math.random()*2+.3}));
+function draw(){
+  ctx.fillStyle='#000';ctx.fillRect(0,0,c.width,c.height);
+  stars.forEach(s=>{s.y+=s.z*.4;if(s.y>c.height)s.y=0;ctx.fillStyle=`rgba(255,255,255,${.1+s.z*.15})`;ctx.fillRect(s.x,s.y,s.s,s.s);});
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

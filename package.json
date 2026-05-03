@@ -1,0 +1,11 @@
+{
+  "name": "arcadevault-android",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Arcade Vault Android wrapper (Capacitor)",
+  "dependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/core": "^8.3.1"
+  }
+}

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>ECHO MAZE</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000510;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'VT323',monospace;touch-action:none}
+canvas{display:block;max-width:100vmin;max-height:100vmin}
+#back{position:fixed;top:14px;left:16px;color:rgba(0,230,100,.55);font-family:'VT323',monospace;font-size:18px;text-decoration:none;letter-spacing:.12em;z-index:10;transition:color .2s;}
+#back:hover{color:#00e664;}
+#hi{position:fixed;top:14px;right:16px;color:rgba(0,200,80,.45);font-family:'VT323',monospace;font-size:16px;letter-spacing:.1em;z-index:10;}
+</style>
+</head>
+<body>
+<a href="index.html" id="back">← VAULT</a>
+<div id="hi">BEST: LVL <span id="hi-val">1</span></div>
+<canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c'),ctx=C.getContext('2d');
+const SZ=C.width=C.height=Math.min(window.innerWidth,window.innerHeight,620);
+
+// Audio
+const AC=new AudioContext();
+const sonar=(freq=320,dur=.9,vol=.35)=>{
+  if(AC.state==='suspended')AC.resume();
+  const o=AC.createOscillator(),g=AC.createGain(),rev=AC.createConvolver();
+  o.connect(g);g.connect(AC.destination);
+  o.type='sine';o.frequency.value=freq;
+  g.gain.setValueAtTime(vol,AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+dur);
+  o.start();o.stop(AC.currentTime+dur);
+};
+const step=()=>{sonar(200,.06,.08);};
+
+// Maze config
+const COLS=19,ROWS=19;
+const CELL=Math.floor(SZ/COLS);
+const OX=Math.floor((SZ-COLS*CELL)/2);
+const OY=Math.floor((SZ-ROWS*CELL)/2);
+
+// State
+let maze,player,exit_,pulses,vis,level=1,STATE='start',moveRep={};
+let bestLevel=+localStorage.getItem('em_b')||1;
+document.getElementById('hi-val').textContent=bestLevel;
+
+// Recursive backtracker maze
+function genMaze(){
+  const g=Array.from({length:ROWS},()=>Array.from({length:COLS},()=>({n:true,s:true,e:true,w:true,v:false})));
+  const carve=(cx,cy)=>{
+    g[cy][cx].v=true;
+    const dirs=[{dx:0,dy:-1,d:'n',od:'s'},{dx:0,dy:1,d:'s',od:'n'},{dx:1,dy:0,d:'e',od:'w'},{dx:-1,dy:0,d:'w',od:'e'}];
+    for(let i=dirs.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[dirs[i],dirs[j]]=[dirs[j],dirs[i]];}
+    for(const{dx,dy,d,od}of dirs){
+      const nx=cx+dx,ny=cy+dy;
+      if(nx>=0&&nx<COLS&&ny>=0&&ny<ROWS&&!g[ny][nx].v){g[cy][cx][d]=false;g[ny][nx][od]=false;carve(nx,ny);}
+    }
+  };
+  carve(0,0);return g;
+}
+
+function cellPx(gx,gy){return{px:OX+gx*CELL+CELL/2,py:OY+gy*CELL+CELL/2};}
+
+function revealAround(px,py,radius){
+  for(let gy=0;gy<ROWS;gy++)for(let gx=0;gx<COLS;gx++){
+    const{px:cx,py:cy}=cellPx(gx,gy);
+    const d=Math.hypot(cx-px,cy-py);
+    if(d<radius)vis[gy][gx]=Math.max(vis[gy][gx],1-d/radius*.85);
+  }
+}
+
+function emitPulse(px,py,str=1,quiet=false){
+  if(AC.state==='suspended')AC.resume();
+  const maxR=SZ*.55*str;
+  pulses.push({px,py,r:0,maxR,alpha:1,speed:SZ*.75});
+  if(!quiet)sonar(280+level*40,.8,.3*str);
+  revealAround(px,py,maxR);
+}
+
+function initLevel(lvl){
+  level=lvl;STATE='play';
+  maze=genMaze();
+  player={gx:0,gy:0};
+  exit_={gx:COLS-1,gy:ROWS-1};
+  pulses=[];
+  vis=Array.from({length:ROWS},()=>new Float32Array(COLS));
+  // Reveal start
+  const{px,py}=cellPx(0,0);
+  emitPulse(px,py,.6,true);
+  vis[0][0]=1;vis[0][1]=.8;vis[1][0]=.8;
+}
+
+function move(dx,dy){
+  if(STATE!=='play')return;
+  const{gx,gy}=player,cell=maze[gy][gx];
+  let ok=false;
+  if(dx===1&&!cell.e)ok=true;
+  if(dx===-1&&!cell.w)ok=true;
+  if(dy===1&&!cell.s)ok=true;
+  if(dy===-1&&!cell.n)ok=true;
+  if(!ok)return;
+  player.gx+=dx;player.gy+=dy;
+  step();
+  // Small reveal around player
+  const{px,py}=cellPx(player.gx,player.gy);
+  revealAround(px,py,CELL*2.2);
+  if(player.gx===exit_.gx&&player.gy===exit_.gy){
+    STATE='win';sonar(880,1.2,.5);
+    if(level>bestLevel){bestLevel=level;localStorage.setItem('em_b',bestLevel);document.getElementById('hi-val').textContent=bestLevel;}
+    setTimeout(()=>initLevel(level+1),1800);
+  }
+}
+
+// Input
+const keys={};
+document.addEventListener('keydown',e=>{
+  if(AC.state==='suspended')AC.resume();
+  if(STATE==='start'){initLevel(1);return;}
+  if(e.code==='Space'){e.preventDefault();const{px,py}=cellPx(player.gx,player.gy);emitPulse(px,py);return;}
+  const map={'ArrowUp':[0,-1],'KeyW':[0,-1],'ArrowDown':[0,1],'KeyS':[0,1],'ArrowLeft':[-1,0],'KeyA':[-1,0],'ArrowRight':[1,0],'KeyD':[1,0]};
+  if(map[e.code]){e.preventDefault();if(!keys[e.code])move(...map[e.code]);keys[e.code]=true;}
+});
+document.addEventListener('keyup',e=>{keys[e.code]=false;clearInterval(moveRep[e.code]);delete moveRep[e.code];});
+// Key repeat
+document.addEventListener('keydown',e=>{
+  const map={'ArrowUp':[0,-1],'KeyW':[0,-1],'ArrowDown':[0,1],'KeyS':[0,1],'ArrowLeft':[-1,0],'KeyA':[-1,0],'ArrowRight':[1,0],'KeyD':[1,0]};
+  if(map[e.code]&&!moveRep[e.code]){clearTimeout(moveRep[e.code+'_d']);moveRep[e.code+'_d']=setTimeout(()=>{moveRep[e.code]=setInterval(()=>move(...map[e.code]),100);},180);}
+});
+document.addEventListener('keyup',e=>{clearTimeout(moveRep[e.code+'_d']);clearInterval(moveRep[e.code]);delete moveRep[e.code];});
+
+// Touch swipe
+let ts_=null;
+C.addEventListener('touchstart',e=>{e.preventDefault();ts_={x:e.touches[0].clientX,y:e.touches[0].clientY};if(AC.state==='suspended')AC.resume();if(STATE==='start')initLevel(1);},{passive:false});
+C.addEventListener('touchend',e=>{
+  e.preventDefault();if(!ts_)return;
+  const dx=e.changedTouches[0].clientX-ts_.x,dy=e.changedTouches[0].clientY-ts_.y;
+  if(Math.abs(dx)<12&&Math.abs(dy)<12){const{px,py}=cellPx(player.gx,player.gy);emitPulse(px,py);}
+  else if(Math.abs(dx)>Math.abs(dy))move(dx>0?1:-1,0);
+  else move(0,dy>0?1:-1);
+  ts_=null;
+},{passive:false});
+
+let last=0;
+function update(dt){
+  if(STATE==='start')return;
+  // Fade vis
+  for(let gy=0;gy<ROWS;gy++)for(let gx=0;gx<COLS;gx++){
+    if(vis[gy][gx]>.03)vis[gy][gx]-=dt*.12;
+    else vis[gy][gx]=0;
+  }
+  // Player cell always slightly visible
+  if(STATE==='play')vis[player.gy][player.gx]=Math.max(vis[player.gy][player.gx],.55);
+  // Pulse expand
+  pulses.forEach(p=>{p.r+=p.speed*dt;p.alpha=Math.max(0,1-p.r/p.maxR);});
+  pulses=pulses.filter(p=>p.r<p.maxR);
+}
+
+function drawMaze(){
+  for(let gy=0;gy<ROWS;gy++)for(let gx=0;gx<COLS;gx++){
+    const v=vis[gy][gx];if(v<.01)continue;
+    const x=OX+gx*CELL,y=OY+gy*CELL;
+    const cell=maze[gy][gx];
+    const a=Math.min(1,v*1.5);
+    ctx.strokeStyle=`rgba(0,230,100,${a*.85})`;
+    ctx.lineWidth=1.5;ctx.shadowBlur=5*a;ctx.shadowColor='#00e664';
+    const lns=[];
+    if(cell.n)lns.push([[x,y],[x+CELL,y]]);
+    if(cell.s)lns.push([[x,y+CELL],[x+CELL,y+CELL]]);
+    if(cell.w)lns.push([[x,y],[x,y+CELL]]);
+    if(cell.e)lns.push([[x+CELL,y],[x+CELL,y+CELL]]);
+    lns.forEach(([a,b])=>{ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();});
+  }
+  ctx.shadowBlur=0;
+}
+
+function draw(){
+  // BG
+  ctx.fillStyle='#000510';ctx.fillRect(0,0,SZ,SZ);
+
+  // Subtle radar sweep
+  const t=Date.now()/4e3*Math.PI*2;
+  ctx.save();ctx.globalAlpha=.025;ctx.fillStyle='#00e664';
+  ctx.beginPath();ctx.moveTo(SZ/2,SZ/2);ctx.arc(SZ/2,SZ/2,SZ,t-.25,t);ctx.closePath();ctx.fill();
+  ctx.restore();
+
+  // Maze
+  drawMaze();
+
+  // Pulse rings
+  pulses.forEach(p=>{
+    ctx.save();ctx.globalAlpha=p.alpha*.45;ctx.strokeStyle='#00e664';
+    ctx.lineWidth=2;ctx.shadowBlur=12;ctx.shadowColor='#00e664';
+    ctx.beginPath();ctx.arc(p.px,p.py,p.r,0,Math.PI*2);ctx.stroke();
+    ctx.restore();
+  });
+
+  // Exit — pulsing beacon
+  const{px:ex,py:ey}=cellPx(exit_.gx,exit_.gy);
+  const t2=Date.now()/600;
+  ctx.save();ctx.globalAlpha=.25+Math.sin(t2)*.15;ctx.strokeStyle='#ffff00';ctx.lineWidth=2;ctx.shadowBlur=18;ctx.shadowColor='#ffff00';
+  const es=CELL*.42;ctx.strokeRect(ex-es/2,ey-es/2,es,es);
+  ctx.fillStyle='rgba(255,255,0,.12)';ctx.fillRect(ex-es/2,ey-es/2,es,es);
+  ctx.globalAlpha=1;ctx.fillStyle='#ffff00';ctx.font=`${CELL*.5}px 'VT323',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('✦',ex,ey);
+  ctx.restore();
+
+  // Player
+  if(STATE==='play'||STATE==='win'){
+    const{px,py}=cellPx(player.gx,player.gy);
+    const pr=CELL*.3,t3=Date.now()/400;
+    ctx.save();ctx.shadowBlur=22;ctx.shadowColor='#00ffff';ctx.fillStyle='#00ffff';ctx.beginPath();ctx.arc(px,py,pr,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='rgba(0,255,255,.4)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,pr+Math.sin(t3)*3+4,0,Math.PI*2);ctx.stroke();
+    ctx.restore();
+  }
+
+  // HUD
+  ctx.textAlign='left';ctx.fillStyle='#00e664';ctx.font=`${SZ*.055}px 'VT323',monospace`;
+  ctx.shadowBlur=8;ctx.shadowColor='#00e664';ctx.fillText(`LVL ${level}`,SZ*.02,SZ*.06);
+  ctx.shadowBlur=0;ctx.textAlign='right';ctx.fillStyle='rgba(0,200,80,.45)';ctx.font=`${SZ*.036}px 'VT323',monospace`;
+  ctx.fillText('SPACE: PULSE',SZ*.98,SZ*.06);
+
+  // Win
+  if(STATE==='win'){
+    ctx.fillStyle='rgba(0,5,16,.8)';ctx.fillRect(0,0,SZ,SZ);
+    ctx.textAlign='center';ctx.shadowBlur=22;ctx.shadowColor='#00e664';
+    ctx.fillStyle='#00e664';ctx.font=`${SZ*.11}px 'VT323',monospace`;ctx.fillText('SECTOR CLEARED',SZ/2,SZ/2);
+    ctx.shadowBlur=0;ctx.fillStyle='rgba(0,200,80,.5)';ctx.font=`${SZ*.042}px 'VT323',monospace`;ctx.fillText(`ENTERING LEVEL ${level+1}...`,SZ/2,SZ*.6);
+  }
+
+  // Start
+  if(STATE==='start'){
+    ctx.fillStyle='rgba(0,5,16,.92)';ctx.fillRect(0,0,SZ,SZ);
+    ctx.textAlign='center';
+    ctx.shadowBlur=25;ctx.shadowColor='#00e664';ctx.fillStyle='#00e664';ctx.font=`bold ${SZ*.14}px 'VT323',monospace`;ctx.fillText('ECHO',SZ/2,SZ*.35);
+    ctx.shadowBlur=20;ctx.shadowColor='#00ffff';ctx.fillStyle='#00ffff';ctx.font=`bold ${SZ*.14}px 'VT323',monospace`;ctx.fillText('MAZE',SZ/2,SZ*.52);
+    ctx.shadowBlur=0;ctx.fillStyle='rgba(0,255,180,.5)';ctx.font=`${SZ*.042}px 'VT323',monospace`;ctx.fillText('SPACE  =  SONAR  PULSE',SZ/2,SZ*.68);
+    ctx.fillStyle='rgba(0,200,100,.3)';ctx.font=`${SZ*.032}px 'VT323',monospace`;ctx.fillText('navigate the dark  ·  find the beacon',SZ/2,SZ*.77);
+    ctx.fillStyle='rgba(255,255,255,.35)';ctx.font=`${SZ*.038}px 'VT323',monospace`;ctx.fillText('tap or press any key to begin',SZ/2,SZ*.88);
+  }
+}
+
+function loop(ts){const dt=Math.min((ts-last)/1e3,.05);last=ts;update(dt);draw();requestAnimationFrame(loop);}
+requestAnimationFrame(ts=>{last=ts;loop(ts);});
+</script>
+</body>
+</html>

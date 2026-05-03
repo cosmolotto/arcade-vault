@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Arcade Vault — Classic Games</string>
+    <string name="title_activity_main">Arcade Vault — Classic Games</string>
+    <string name="package_name">com.morven.arcadevault</string>
+    <string name="custom_url_scheme">com.morven.arcadevault</string>
+</resources>
