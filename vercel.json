@@ -1,1 +1,6 @@
-{"buildCommand":null,"outputDirectory":".","framework":null}
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/privacy", "destination": "/privacy/index.html" }
+  ]
+}
