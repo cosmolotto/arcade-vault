@@ -35,6 +35,10 @@ canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;pointer-eve
 </head>
 <body>
 <canvas id="bg"></canvas>
+<div id="mrv-hud" style="position:fixed;top:18px;right:18px;display:flex;align-items:center;gap:10px;font-size:.7rem;letter-spacing:.2em;color:#ffdd00;background:rgba(0,0,0,.5);border:1px solid rgba(255,221,0,.3);padding:8px 14px;border-radius:100px;backdrop-filter:blur(6px);z-index:10">
+  <span>◈ <span id="mrv-hud-val">—</span> MRV</span>
+  <button id="mrv-hud-btn" style="background:none;border:1px solid rgba(255,221,0,.5);color:#ffdd00;font-size:.6rem;padding:4px 10px;border-radius:100px;cursor:pointer;letter-spacing:.15em;font-family:inherit">CONNECT</button>
+</div>
 <h1>ARCADE VAULT</h1>
 <p class="sub">SIX GAMES · EARN MRV · ONE VAULT</p>
 <div style="font-size:.6rem;letter-spacing:.2em;color:rgba(255,221,0,.6);margin-bottom:1.5rem;text-align:center">◈ CONNECT WALLET · WIN GAMES · EARN MRV TOKEN</div>
@@ -57,25 +61,87 @@ canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;pointer-eve
     <div class="desc">Match all pairs before the timer runs out. Beat 60s for 1 MRV reward.</div>
     <div class="play" style="color:#4caf50;opacity:1">🏆 WIN 1 MRV →</div>
   </a>
-  <a href="void-runner.html" class="card cyan" style="opacity:.7">
+  <a href="#" data-premium="void-runner" data-cost="10" class="card cyan premium-card">
     <div class="icon">◇</div>
     <div class="name">VOID RUNNER</div>
-    <div class="desc">Flip gravity to survive the endless void. How long can you last?</div>
-    <div class="play">TAP TO PLAY →</div>
+    <div class="desc">Flip gravity to survive the endless void. Premium game.</div>
+    <div class="play premium-cta">🔒 UNLOCK FOR 10 MRV →</div>
   </a>
-  <a href="echo-maze.html" class="card magenta" style="opacity:.7">
+  <a href="#" data-premium="echo-maze" data-cost="10" class="card magenta premium-card">
     <div class="icon">◎</div>
     <div class="name">ECHO MAZE</div>
-    <div class="desc">Navigate in total darkness. Use sonar pulses to reveal the path.</div>
-    <div class="play">TAP TO PLAY →</div>
+    <div class="desc">Navigate in total darkness. Use sonar pulses. Premium game.</div>
+    <div class="play premium-cta">🔒 UNLOCK FOR 10 MRV →</div>
   </a>
-  <a href="asteroid-storm.html" class="card yellow" style="opacity:.7">
+  <a href="#" data-premium="asteroid-storm" data-cost="15" class="card yellow premium-card">
     <div class="icon">✦</div>
     <div class="name">ASTEROID STORM</div>
-    <div class="desc">Defend against endless asteroid waves. Collect power-ups, build combos.</div>
-    <div class="play">TAP TO PLAY →</div>
+    <div class="desc">Defend against endless asteroid waves. Premium game.</div>
+    <div class="play premium-cta">🔒 UNLOCK FOR 15 MRV →</div>
   </a>
 </div>
+<script src="https://morven-sdk.vercel.app/morven.js"></script>
+<script>
+async function refreshHudBalance() {
+  try {
+    if (typeof morvenWallet === 'undefined') return;
+    const bal = await morvenWallet.getBalance();
+    document.getElementById('mrv-hud-val').textContent = parseFloat(bal.mrv || 0).toFixed(1);
+    document.getElementById('mrv-hud-btn').textContent = 'CONNECTED';
+    applyUnlocks();
+  } catch (e) { /* not logged in */ }
+}
+
+function applyUnlocks() {
+  document.querySelectorAll('.premium-card').forEach(card => {
+    const slug = card.getAttribute('data-premium');
+    if (localStorage.getItem('av_unlocked_' + slug)) {
+      card.querySelector('.premium-cta').textContent = '✓ UNLOCKED · TAP TO PLAY →';
+      card.setAttribute('href', slug + '.html');
+    }
+  });
+}
+
+async function unlockPremium(slug, cost) {
+  try {
+    const auth = await morvenWallet.login();
+    const bal = await morvenWallet.getBalance(auth.jwt);
+    if (bal.mrv < cost) {
+      alert('Need ' + cost + ' MRV — you have ' + bal.mrv.toFixed(1) + '. Win games to earn more.');
+      return;
+    }
+    if (!confirm('Unlock ' + slug + ' for ' + cost + ' MRV?\nBalance after: ' + (bal.mrv - cost).toFixed(1) + ' MRV')) return;
+    const tx = await morvenWallet.pay(auth.jwt, cost, 'arcade-unlock-' + slug);
+    if (tx.success) {
+      localStorage.setItem('av_unlocked_' + slug, tx.tx_id);
+      refreshHudBalance();
+      window.location.href = slug + '.html';
+    }
+  } catch (e) { alert('Unlock failed: ' + e.message); }
+}
+
+document.querySelectorAll('.premium-card').forEach(card => {
+  card.addEventListener('click', e => {
+    e.preventDefault();
+    const slug = card.getAttribute('data-premium');
+    const cost = parseInt(card.getAttribute('data-cost'), 10);
+    if (localStorage.getItem('av_unlocked_' + slug)) {
+      window.location.href = slug + '.html';
+    } else {
+      unlockPremium(slug, cost);
+    }
+  });
+});
+
+document.getElementById('mrv-hud-btn').addEventListener('click', async () => {
+  try {
+    await morvenWallet.login();
+    refreshHudBalance();
+  } catch (e) { /* user cancelled */ }
+});
+
+refreshHudBalance();
+</script>
 <script>
 const c=document.getElementById('bg'),ctx=c.getContext('2d');
 c.width=window.innerWidth;c.height=window.innerHeight;
